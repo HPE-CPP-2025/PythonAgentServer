@@ -26,8 +26,8 @@ def ask_energy_agent(request: QueryRequest):
 def root():
     return {"message": "Energy AI Agent is running!"}
 
-# filepath: c:\MY DRIVE\HPE\energy_agent\backend\main.py
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
