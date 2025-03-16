@@ -9,16 +9,17 @@ from ai_agent.agent import ask_agent
 # Initialize FastAPI app
 app = FastAPI()
 
-# Request model for the query
+# Updated Request model to include optional house_id
 class QueryRequest(BaseModel):
     query: str
+    house_id: str = None  # Optional house_id parameter
 
 @app.post("/ask")
 def ask_energy_agent(request: QueryRequest):
     """
     API endpoint to interact with the AI agent.
     """
-    response = ask_agent(request.query)
+    response = ask_agent(request.query, request.house_id)  # Pass house_id to the agent
     return {"query": request.query, "response": response}
 
 # Root endpoint
@@ -29,5 +30,3 @@ def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-

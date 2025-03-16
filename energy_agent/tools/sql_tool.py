@@ -18,8 +18,11 @@ logger = logging.getLogger(__name__)
 # Initialize LLM using the Gemini model
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
 
-# Get allowed tables (used for security/sanity check)
-ALLOWED_TABLES = db.get_usable_table_names()
+# Get filtered table names (excluding 'users' table)
+def get_filtered_table_names():
+    """Return a list of table names that the agent can access, excluding 'users'."""
+    all_tables = db.get_usable_table_names()
+    return [table for table in all_tables if table.lower() != 'users']
 
 @tool
 def query_database(question: str) -> str:
@@ -38,29 +41,53 @@ def query_database(question: str) -> str:
     """
     logger.info(f"User question: {question}")
     
-    # Generate SQL query using the LLM & SQL chain:
-    sql_chain = create_sql_query_chain(llm, db)
-    generated_sql = sql_chain.invoke({"question": question}).strip()
+    # Check if database is available
+    if db is None:
+        logger.error("Database connection is not available")
+        return "I'm sorry, but I can't access the database at the moment. Please try again later."
     
-    # Remove markdown code fences (e.g. ```sql ... ```)
-    generated_sql = re.sub(r"^```(sql)?\s*", "", generated_sql, flags=re.IGNORECASE)
-    generated_sql = re.sub(r"\s*```$", "", generated_sql, flags=re.IGNORECASE)
-    generated_sql = generated_sql.strip()
-    
-    # Validate that the generated SQL starts with SELECT.
-    if not generated_sql.lower().startswith("select"):
-        logger.error("Generated SQL does not start with SELECT. Aborting execution.")
-        return ("I'm sorry, the query could not be executed as it does not appear to be a valid SQL SELECT statement. "
-                "Please try rephrasing your question with more specific details.")
-    
-    logger.info(f"Generated SQL: {generated_sql}")
+    # Refresh the allowed tables
+    allowed_tables = get_filtered_table_names()
+    logger.info(f"Allowed tables: {allowed_tables}")
     
     try:
+        # Get table information for context
+        table_info = db.get_table_info()
+        
+        # Create enhanced question with table info
+        enhanced_question = f"{question}. Use the following database schema:\n{table_info}"
+        
+        # Generate SQL using LangChain's SQL query chain
+        sql_chain = create_sql_query_chain(llm, db)
+        generated_sql = sql_chain.invoke({"question": enhanced_question}).strip()
+        
+        # Remove markdown code fences
+        generated_sql = re.sub(r"^```(sql)?\s*", "", generated_sql, flags=re.IGNORECASE)
+        generated_sql = re.sub(r"\s*```$", "", generated_sql, flags=re.IGNORECASE)
+        generated_sql = generated_sql.strip()
+        
+        # Validate that the generated SQL starts with SELECT
+        if not generated_sql.lower().startswith("select"):
+            logger.error("Generated SQL does not start with SELECT. Aborting execution.")
+            return ("I'm sorry, I couldn't generate a valid query for your question. "
+                    "Please try asking in a different way with more specific details.")
+        
+        logger.info(f"Final SQL: {generated_sql}")
+        
+        # Execute the query
         result = db.run(generated_sql)
         logger.info(f"Query Result: {result}")
+        
+        # Make the result more readable
+        if isinstance(result, list):
+            if len(result) == 0:
+                return "No results found for your query."
+            elif len(result) == 1 and len(result[0]) == 1:
+                # Single value result
+                return str(result[0][0])
+        
         return str(result)
-    except Exception as sql_error:
-        logger.error(f"SQL error: {sql_error}")
-        return ("I'm sorry, I couldn't execute your query due to a database error. "
-                "It appears your question might be too vague or formulated in a problematic way. "
-                "Please try rephrasing it with more specific details.")
+        
+    except Exception as e:
+        logger.error(f"Error in query_database: {str(e)}")
+        return f"I'm sorry, I encountered an error: {str(e)}. Please try rephrasing your question."
