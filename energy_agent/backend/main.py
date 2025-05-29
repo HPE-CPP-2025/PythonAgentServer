@@ -5,9 +5,11 @@ import sys
 import time
 import threading
 from collections import defaultdict
+from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from ai_agent.agent import ask_agent
+from ai_agent.prompt_templates import MAIN_DEBUG_MESSAGES, MAIN_INSTRUCTION_TEMPLATE, CHAT_HISTORY_FORMAT, APP_MESSAGE
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -39,7 +41,7 @@ def get_chat_history(house_id):
     
     history = ""
     for chat in chat_sessions[house_id]:
-        history += f"Previous Q: {chat['query']}\nPrevious A: {chat['response']}\n\n"
+        history += CHAT_HISTORY_FORMAT.format(query=chat['query'], response=chat['response'])
     return history
 
 # Updated Request model to include optional house_id
@@ -52,18 +54,22 @@ def ask_energy_agent(request: QueryRequest):
     """API endpoint to interact with the AI agent."""
     
     # Get chat history
+    print(MAIN_DEBUG_MESSAGES["received_request"].format(house_id=request.house_id))
     chat_history = get_chat_history(request.house_id)
-    print(f"DEBUG: Chat history for {request.house_id}: {len(chat_sessions.get(request.house_id, []))} messages")
+    print(MAIN_DEBUG_MESSAGES["chat_history_count"].format(house_id=request.house_id, count=len(chat_sessions.get(request.house_id, []))))
     
-    # Add history and instruction to query
-    instruction = "IMPORTANT: If you can answer this question without needing any external data from the database, do NOT use any database tools. Only access the database if you specifically need energy data, device information, or consumption statistics.\n\n"
+    today = datetime.now().strftime("%Y-%m-%d")
+    current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Add history and instruction to query with date context
+    instruction = MAIN_INSTRUCTION_TEMPLATE.format(today=today, current_datetime=current_datetime)
     
     if chat_history:
         enhanced_query = f"{instruction}{chat_history}Current Question: {request.query}"
-        print(f"DEBUG: Using chat history in query")
+        print(MAIN_DEBUG_MESSAGES["using_history"])
     else:
         enhanced_query = f"{instruction}{request.query}"
-        print(f"DEBUG: No chat history found")
+        print(MAIN_DEBUG_MESSAGES["no_history"])
     
     # Get response from agent
     response = ask_agent(enhanced_query, request.house_id)
@@ -76,14 +82,14 @@ def ask_energy_agent(request: QueryRequest):
             "time": time.time()
         })
         start_timer(request.house_id)
-        print(f"DEBUG: Saved chat. Total messages for {request.house_id}: {len(chat_sessions[request.house_id])}")
+        print(MAIN_DEBUG_MESSAGES["saved_chat"].format(house_id=request.house_id, count=len(chat_sessions[request.house_id])))
     
     return {"query": request.query, "response": response}
 
 # Root endpoint
 @app.get("/")
 def root():
-    return {"message": "Energy AI Agent is running!"}
+    return {"message": APP_MESSAGE}
 
 if __name__ == "__main__":
     import uvicorn
