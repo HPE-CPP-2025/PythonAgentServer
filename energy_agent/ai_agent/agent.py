@@ -1,5 +1,4 @@
 import logging
-import re
 import sys
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -7,7 +6,7 @@ from langchain.agents import initialize_agent
 from langchain.tools import Tool
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from tools.sql_tool import query_database
+from tools.sql_tool import query_database_with_schema
 from ai_agent.prompt_templates import *
 
 # Configure logging
@@ -18,21 +17,15 @@ logger = logging.getLogger(__name__)
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
 
 def get_schema_info():
-    """Get comprehensive database schema information."""
-    try:
-        schema_result = query_database(SCHEMA_QUERY_TEMPLATE)
-        return schema_result
-    except Exception as e:
-        logger.error(LOG_MESSAGES["schema_error"].format(error=e))
-        return ERROR_MESSAGES["schema_unavailable"]
+    """Get hardcoded database schema information."""
+    return HARDCODED_SCHEMA
 
 def ask_agent(user_question, house_id=None, max_iterations=8):
-    """Uses the ReAct agent to answer database queries with proper schema context and security measures."""
+    """Uses the ReAct agent to answer database queries with hardcoded schema."""
     try:
         def secure_query(question):
-            """Secure query wrapper with proper context formatting"""
+            """Secure query wrapper that passes hardcoded schema"""
             try:
-                # Get schema only when actually querying
                 schema_info = get_schema_info()
                 
                 if house_id:
@@ -47,10 +40,9 @@ def ask_agent(user_question, house_id=None, max_iterations=8):
                         question=question
                     )
                 
-                # Execute the query
-                result = query_database(secure_question)
+                # Pass the hardcoded schema directly to sql tool
+                result = query_database_with_schema(secure_question, schema_info)
                 
-                # Log successful execution
                 if house_id:
                     logger.info(LOG_MESSAGES["query_executed"].format(house_id=house_id))
                 
@@ -62,7 +54,7 @@ def ask_agent(user_question, house_id=None, max_iterations=8):
         
         def check_schema_tool(input_text):
             """Tool to provide database schema information"""
-            schema_info = get_schema_info()  # Get schema only when this tool is called
+            schema_info = get_schema_info()
             return SCHEMA_INFO_TEMPLATE.format(schema_info=schema_info)
         
         # Define agent tools
