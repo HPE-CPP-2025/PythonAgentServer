@@ -65,18 +65,12 @@ POST /ask
   "house_id": "house123"
 }
 
-# Example 3: Direct SQL Query
-POST /ask
-{
-  "query": "SELECT AVG(consumption) FROM energy_data WHERE date >= '2023-01-01'"
-}
 ```
 
 ## Security
 The AI agent implements a strong security model to ensure data access restrictions:
 - House ID constraints enforce that queries only return data for authorized houses
 - Security filters are explicitly applied to all generated SQL
-- API key validation for service authentication
 
 ## Deployment
 The application is containerized using Docker and can be deployed to cloud services such as Render.

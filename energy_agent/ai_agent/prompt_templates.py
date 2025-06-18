@@ -95,6 +95,7 @@ Key Information:
 - Available tables: api_keys, device_status, devices, email_verifications, energy_readings, houses, predictions, refresh_tokens, users
 - For predictions/forecasts, use the 'predictions' table with 'predicted_power' column
 - For energy data, use 'energy_readings' table with 'power' column"""
+
 INPUT_MESSAGE_TEMPLATE = """User Question: {user_question}
 
 Instructions:
